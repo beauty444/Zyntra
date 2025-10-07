@@ -3,7 +3,6 @@ import * as userModels from "../models/user.model.js";
 import { ApiError, apiError } from "../utils/error.util.js";
 import { CUSTOM_ERROR, EXISTS, INVALID, NOT_FOUND } from "../utils/message.util.js";
 import { isEmpty } from "../utils/misc.util.js";
-import { JWT_EXPIRY, JWT_SECRET } from "../constants.js";
 import jwt from 'jsonwebtoken';
 import { forgotPasswordEmail, sendVerificationEmail } from "../utils/email.util.js";
 
@@ -80,7 +79,7 @@ export const loginUserService = async (email, password) => {
     full_name: existingUser.full_name,
     email: existingUser.email,
   };
-  const token = jwt.sign(userData, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+  const token = jwt.sign(userData, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRATION });
   return token;
 };
 

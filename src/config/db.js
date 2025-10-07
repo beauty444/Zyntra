@@ -1,50 +1,56 @@
-// src/config/db.js
+import mysql from "mysql2/promise";
+import { logger } from "./logger.js";
+import { initEntities } from "./entities/index.js";
+import dotenv from "dotenv";
 
-import mysql from 'mysql2/promise';
-import { logger } from './logger.js';
-import { initEntities } from "./entities/index.js" // adjust path if needed
+dotenv.config();
 
 let pool;
 
-/**
- * Connect to the database and initialize the pool
- */
 export async function connectDB() {
   if (pool) return pool;
 
-  // Use process.env instead of env
+  // Step 1: Create temporary connection (no database selected)
+  const connection = await mysql.createConnection({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD || "",
+    port: Number(process.env.DB_PORT) || 3306,
+  });
+
+  // Step 2: Create the database if not exists
+  await connection.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\``);
+  console.log(`✅ Database "${process.env.DB_NAME}" checked/created`);
+
+  await connection.end();
+
+  // Step 3: Create connection pool (now that DB exists)
   pool = mysql.createPool({
     host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
+    password: process.env.DB_PASSWORD || "",
     database: process.env.DB_NAME,
+    port: Number(process.env.DB_PORT) || 3306,
     waitForConnections: true,
-    connectionLimit: Number(process.env.DB_CONN_LIMIT || 10),
+    connectionLimit: Number(process.env.DB_CONN_LIMIT) || 10,
     queueLimit: 0,
   });
 
-  // Create database if not exists
-  await pool.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\``);
+  // Step 4: Test the pool connection
+  const testConn = await pool.getConnection();
+  await testConn.ping();
+  testConn.release();
+  console.log("✅ Database connected successfully");
 
-  // Ping DB to check health
-  const [rows] = await pool.query('SELECT 1 AS ok');
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error('DB health check failed');
-  }
-
-  // Initialize entities/tables
+  // Step 5: Initialize entities/tables
   await initEntities();
+  logger.info("✅ Entities initialized");
 
-  logger.info('✅ Database connected and entities initialized');
   return pool;
 }
 
-/**
- * Helper to run a function with a DB connection
- */
 export async function withConnection(run) {
-  if (!pool) await connectDB(); // ensure pool exists
+  if (!pool) await connectDB();
   const connection = await pool.getConnection();
   try {
     return await run(connection);
